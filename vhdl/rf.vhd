@@ -22,10 +22,11 @@ library std;
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_textio.all;
+use ieee.std_logic_unsigned.all;
 use std.textio.all;
 
 entity RF is
-    generic(W : natural = 32);
+    generic(W : natural := 32);
     port(A1 :  in  std_logic_vector(4 downto 0);
          A2 :  in  std_logic_vector(4 downto 0);
          A3 :  in  std_logic_vector(4 downto 0);
@@ -37,74 +38,46 @@ entity RF is
     );
 end RF;
 
-architecture rf_arch of RF is
-
-    --type declarations
-	
-	--component declarations
-	component reg
-        generic(
-            n: natural :=2
-        );
-        port(
-		    I     : in  std_logic_vector(n-1 downto 0);
-	        clock : in  std_logic;
-	        load  : in  std_logic;
-	        clear : in  std_logic;
-	        Q     : out std_logic_vector(n-1 downto 0)
-        );
-	end component;
-	
-	--signal declarations
-	
+architecture behaviour of RF is
+	subtype std_logic_W is std_logic_vector(W-1 downto 0);
+	type register_array is array (0 to 4) of std_logic_W;
+	signal registers : register_array;
 begin
-	
-
-
-end rf_arch;
-
-
----------------------------------------------------
--- O CODIGO ABAIXO É DO REGISTER FILE DO DP32!!!!
----------------------------------------------------
-
-use work.dp32_types.all;
-entity reg_file_32_rrw is
-	generic (	depth : positive; -- number of address bits
-				Tpd : Time := unit_delay;
-				Tac : Time := unit_delay
-	);
-	port (	a1 : in bit_vector(depth-1 downto 0);
-			q1 : out bus_bit_32 bus;
-			en1 : in bit;
-			a2 : in bit_vector(depth-1 downto 0);
-			q2 : out bus_bit_32 bus;
-			en2 : in bit;
-			a3 : in bit_vector(depth-1 downto 0);
-			d3 : in bit_32;
-			en3 : in bit
-	);
-end reg_file_32_rrw;
-
-architecture behaviour of reg_file_32_rrw is
-begin
-	reg_file: process (a1, en1, a2, en2, a3, d3, en3)
-		subtype reg_addr is natural range 0 to depth-1;
-		type register_array is array (reg_addr) of bit_32;
-		variable registers : register_array;
+	-- setar o registrador R(0)	
+	set_R0: process
 	begin
-		if en3 = '1' then
-			registers(bits_to_natural(a3)) := d3;
+		registers(0) <= "00000000000000000000000000000000";
+		wait;
+	end process set_R0;
+
+	-- escrita sincrona
+	rf: process (clk)		
+	begin
+		if clk'event and (clk = '1' and We3 = '1') then
+			if conv_integer(A3) /= 0 then
+				registers(conv_integer(A3)) <= WD3;
+			end if;
+			if conv_integer(A3) = conv_integer(A1) then
+				RD1 <= registers(conv_integer(A1));			
+			end if;
+			if conv_integer(A3) = conv_integer(A2) then
+				RD2 <= registers(conv_integer(A2));			
+			end if;
 		end if;
-		if en1 = '1' then
-			q1 <= registers(bits_to_natural(a1)) after Tac;
-		else
-			q1 <= null after Tpd;
-		end if;
-		if en2 = '1' then
-			q2 <= registers(bits_to_natural(a2)) after Tac;
-		else
-			q2 <= null after Tpd;
-		end if;
-	end process reg_file;
+	end process rf;
+
+	-- leitura assincrona de A1
+	setA1: process (A1)
+	begin
+		RD1 <= registers(conv_integer(A1));
+	end process setA1;
+
+	-- leitura assincrona de A2
+	setA2: process (A2)
+	begin
+		RD2 <= registers(conv_integer(A2));
+	end process setA2;
+
 end behaviour;
+
+
